@@ -1,0 +1,183 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Telegram Login
+{% endblock %}
+
+{% block main %}
+
+
+<a class="text-white" href="{{ url_for('logout') }}">App Logout</a>
+<br>
+<a class="text-white" href="{{ url_for('tele_logout') }}">Terminate Telegram Session</a>
+<div id="forms">
+    <!-- <form id="phoneform">
+        <label for="phone">Phone Number (with international code)</label>
+        <input type="text" autofocus placeholder="Phone" name="phone" id="phone">
+        <button type="submit">Request Code</button>
+    </form>
+    <br><br> -->
+    <div class="bg-white shadow sm:rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+          <h3 class="text-base font-semibold leading-6 text-gray-900">Login to Telegram</h3>
+          <div class="mt-2 max-w-xl text-sm text-gray-500">
+            <p>Enter the phone number associated to your Telegram account to receive login code</p>
+          </div>
+          <form class="mt-5 sm:flex sm:items-center" id="phoneform">
+            <div class="w-full sm:max-w-xs">
+              <label for="phone" class="sr-only">Phone Number (with international code)</label>
+              <input type="text" name="phone" id="phone" class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6" placeholder="+65--------">
+            </div>
+            <button type="submit" class="mt-3 inline-flex w-full items-center justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:ml-3 sm:mt-0 sm:w-auto">Request Code</button>
+          </form>
+        </div>
+      </div>
+
+    <!-- <form id="codeform">
+        <label for="code">Code</label>
+        <input type="text" placeholder="Code" name="code" id="code">
+        <button type="submit">Submit Code</button>
+    </form>
+    <br><br> -->
+    <div class="bg-white shadow sm:rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+          <h3 class="text-base font-semibold leading-6 text-gray-900">Login to Telegram</h3>
+          <div class="mt-2 max-w-xl text-sm text-gray-500">
+            <p>Enter the login code received on telegram</p>
+          </div>
+          <form class="mt-5 sm:flex sm:items-center" id="codeform">
+            <div class="w-full sm:max-w-xs">
+              <label for="code" class="sr-only">Login code</label>
+              <input type="text" name="code" id="code" class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6" placeholder="-----">
+            </div>
+            <button type="submit" class="mt-3 inline-flex w-full items-center justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:ml-3 sm:mt-0 sm:w-auto">Login</button>
+          </form>
+        </div>
+      </div>
+
+    <!-- <form id="2faform">
+        <label for="2fa">Two-factor Authentication Password</label>
+        <input type="password" placeholder="Password" name="2fa" id="2fa">
+        <button type="submit">Submit 2fa</button>
+    </form> -->
+    <div class="bg-white shadow sm:rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+          <h3 class="text-base font-semibold leading-6 text-gray-900">Login to Telegram</h3>
+          <div class="mt-2 max-w-xl text-sm text-gray-500">
+            <p>Two-factor authentication password required</p>
+          </div>
+          <form class="mt-5 sm:flex sm:items-center" id="2faform">
+            <div class="w-full sm:max-w-xs">
+              <label for="2fa" class="sr-only">Two-factor Authentication</label>
+              <input type="password" name="2fa" id="2fa" class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6" placeholder="-----">
+            </div>
+            <button type="submit" class="mt-3 inline-flex w-full items-center justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:ml-3 sm:mt-0 sm:w-auto">Login</button>
+          </form>
+        </div>
+      </div>
+    
+    
+    <!-- <form id="testform">
+        <label for="test">testestest</label>
+        <input type="text" placeholder="Test" name="test" id="test">
+        <button type="submit">Test</button>
+    </form> -->
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+
+<script>
+$(document).ready(function(){
+
+$("#phoneform").on('submit', function (e) {
+        e.preventDefault()
+        var form = document.getElementById('phoneform'); 
+        var formData = new FormData(form);
+        $.ajax({
+            url: "/",
+            type: "post",
+            data: formData,
+            processData: false,
+            dataType: "json",
+            contentType: false, //IMPORTANT for sending formdata
+        }).done((r) => {
+            console.log("success")
+            console.log(r)
+        }).fail((r) => {
+            console.log("failure")
+            console.log(r.responseJSON)
+        }); 
+    })
+
+
+$("#codeform").on('submit', function (e) {
+    // $(document).ready(function(){
+        e.preventDefault()
+        var form = document.getElementById('codeform'); 
+        var formData = new FormData(form);
+        $.ajax({
+            url: "/code",
+            type: "post",
+            data: formData,
+            processData: false,
+            contentType: false,
+            dataType: "json",
+        }).done((r) => {
+            console.log("success")
+            console.log(r)
+        }).fail((r) => {
+            console.log("failure")
+            console.log(r.responseJSON)
+        }); 
+    })
+
+$("#2faform").on('submit', function (e) {
+    // $(document).ready(function(){
+        e.preventDefault()
+        var form = document.getElementById('2faform'); 
+        var formData = new FormData(form);
+        $.ajax({
+            url: "/2fa",
+            type: "post",
+            data: formData,
+            processData: false,
+            contentType: false,
+            dataType: "json",
+    
+        }).done((r) => {
+            console.log("success")
+            console.log(r)
+        }).fail((r) => {
+            console.log("failure")
+            console.log(r.responseJSON)
+        });  
+    })
+
+/* $("#testform").on('submit', function (e) {
+    // $(document).ready(function(){
+        e.preventDefault()
+        var form = document.getElementById('testform'); 
+        var formData = new FormData(form);
+        $.ajax({
+            url: "/test",
+            type: "post",
+            data: formData,
+            processData: false,
+            contentType: false,
+            dataType: "json",
+        
+        }).done((r) => {
+            console.log("success")
+            console.log(r)
+        }).fail((r) => {
+            console.log("failure")
+            console.log(r.responseJSON)
+        });  
+    })*/
+})
+
+</script>
+
+{% endblock %}

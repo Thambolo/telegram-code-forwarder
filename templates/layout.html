@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-900">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{url_for('static',filename='dist/css/output.css')}}">
+    {% block stylesheets %}
+    
+    {% endblock %}
+    <title>{% block title %}{% endblock %}</title>
+</head>
+<body class="h-full">
+    
+        {% block main %}{% endblock %}
+        <div id="construct-alert" aria-live="assertive" class="pointer-events-none fixed inset-0 flex items-end px-4 py-6 sm:items-start sm:p-6">
+            <div class="flex w-full flex-col items-center space-y-4 sm:items-end">
+            </div>
+        </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/1.8.1/flowbite.min.js"></script>
+</body>
+</html>
+<script src='https://www.google.com/recaptcha/api.js' async defer></script>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+{% block scripts %}{% endblock %}

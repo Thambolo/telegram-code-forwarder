@@ -1,0 +1,85 @@
+{% extends "layout.html" %}
+
+{% block stylesheets %}
+  <link rel="stylesheet" href="{{url_for('static',filename='src/index.css')}}">
+{% endblock %}
+
+{% block title %}
+    App Register
+{% endblock %}
+
+{% block main %}
+<div>
+
+    <div class="flex min-h-full flex-col justify-center px-6 py-12 lg:px-8">
+        <div class="sm:mx-auto sm:w-full sm:max-w-sm">
+          <img class="mx-auto h-10 w-auto" src="https://tailwindui.com/img/logos/mark.svg?color=indigo&shade=500" alt="Your Company">
+          <span class="moving-text"><h2 class="mt-5 text-center text-2xl font-bold leading-9 tracking-tight text-white">Register for an account</h2></span>
+        </div>
+      
+        <div class="mt-0 sm:mx-auto sm:w-full sm:max-w-sm">
+          <form class="space-y-6" action="/register" method="post" novalidate>
+            {{ form.hidden_tag() }}
+            <div>
+              <label for="username" class="block text-sm font-medium leading-6 text-white">Username</label>
+              <div class="mt-2">
+                <!-- {% if form.username.errors %}
+                  {{ form.username(class_="block w-full rounded-md border-0 bg-white/5 py-1.5 pr-10 text-red-500 ring-1 ring-inset ring-red-500 placeholder:text-red-300 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6") }}
+                  {% for error in form.username.errors %}
+                    <p class="mt-2 text-sm text-red-600" id="email-error">{{ error }}</p>
+                  {% endfor %}
+                {% else %}
+                  {{ form.username(class_="block w-full rounded-md border-0 bg-white/5 py-1.5 px-2.5 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6") }}
+                {% endif %} -->
+                {{ form.username(class_="block w-full rounded-md border-0 bg-white/5 py-1.5 pr-10 text-white invalid:text-red-500 ring-1 ring-inset ring-white/10 invalid:ring-1 invalid:ring-inset invalid:ring-red-500 placeholder:invalid:text-red-300 focus:ring-2 focus:ring-inset focus:ring-indigo-500 focus:invalid:ring-2 focus:invalid:ring-inset focus:invalid:ring-red-500 sm:text-sm sm:leading-6") }}
+                {% if form.username.errors %}
+                  {% for error in form.username.errors %}
+                    <p class="mt-2 text-xs text-red-300">{{ error }}</p>
+                  {% endfor %}
+                {% endif %}
+              </div>
+            </div>
+      
+            <div>
+              <div class="flex items-center justify-between">
+                <label for="password" class="block text-sm font-medium leading-6 text-white">Password</label>
+              </div>
+              <div class="mt-2">
+                {{ form.password(class_="block w-full rounded-md border-0 bg-white/5 py-1.5 pr-10 text-white invalid:text-red-500 ring-1 ring-inset ring-white/10 invalid:ring-1 invalid:ring-inset invalid:ring-red-500 placeholder:invalid:text-red-300 focus:ring-2 focus:ring-inset focus:ring-indigo-500 focus:invalid:ring-2 focus:invalid:ring-inset focus:invalid:ring-red-500 sm:text-sm sm:leading-6") }}
+                {% if form.password.errors %}
+                  {% for error in form.password.errors %}
+                    <p class="mt-2 text-xs text-red-300">{{ error }}</p>
+                  {% endfor %}
+                {% endif %}
+              </div>
+              <div class="mt-2">
+                {{ form.password2(class_="block w-full rounded-md border-0 bg-white/5 py-1.5 pr-10 text-white invalid:text-red-500 ring-1 ring-inset ring-white/10 invalid:ring-1 invalid:ring-inset invalid:ring-red-500 placeholder:invalid:text-red-300 focus:ring-2 focus:ring-inset focus:ring-indigo-500 focus:invalid:ring-2 focus:invalid:ring-inset focus:invalid:ring-red-500 sm:text-sm sm:leading-6") }}
+                {% if form.password2.errors %}
+                  {% for error in form.password2.errors %}
+                    <p class="mt-2 text-xs text-red-300">{{ error }}</p>
+                  {% endfor %}
+                {% endif %}
+              </div>
+            </div>
+
+            <div style="transform:scale(0.7);transform-origin:0 0;filter: invert(0.8) hue-rotate(180deg);">
+              {{ form.recaptcha }}
+            </div>
+            
+            <div>
+                {{ form.submit(class_="flex w-full justify-center rounded-md bg-indigo-500 px-3 py-1.5 text-sm font-semibold leading-6 text-white shadow-sm hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500") }}
+            </div>
+          </form>
+      
+          <p class="mt-2 text-center text-sm text-gray-400">
+            Already have an account?
+            <a href="{{ url_for('login') }}" class="font-semibold leading-6 text-indigo-400 hover:text-indigo-300">Log in</a>
+          </p>
+        </div>
+      </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+
+{% endblock %}

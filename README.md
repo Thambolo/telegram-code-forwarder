@@ -21,5 +21,14 @@ APP_SECRET_KEY=
 TELE_API_HASH=
 TELE_API_ID=
 ```
-5. Run Flask in dev mode using (vscode terminal):
+5. Create the user db using the user class defined in app.py (Or drop in the db if I sent u):
+```
+# looks like that. Check out flask sqlalchemy on how to create a db from this.
+class User(db.Model, UserMixin):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(20), nullable=False, unique=True)
+    password = db.Column(db.String(80), nullable=False)
+```
+6. Ensure db is in instance/ directory (you might have to create dir)
+7. Run Flask in dev mode using (vscode terminal):
 `flask run --debug`

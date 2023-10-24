@@ -10,7 +10,7 @@
 1. Recommended to use python's virtual environment "venv"
 2. Activate the virtual environment
 3. pip install all the dependencies in requirements.txt
-4. environment variables should be added in the file .env (all required vars below)
+4. environment variables should be added in the file .env in project root (all required vars below)
 ```
 # Google recaptcha v2 keys
 RECAPTCHA_PUBLIC_KEY=
@@ -31,4 +31,6 @@ class User(db.Model, UserMixin):
 ```
 6. Ensure db is in instance/ directory (you might have to create dir)
 7. Run Flask in dev mode using (vscode terminal):
-`flask run --debug`
+```flask run --debug```
+8. Additionally, open another terminal and run this line for updates to tailwind to work:
+```npx tailwindcss -i ./static/src/input.css -o ./static/dist/css/output.css --watch```

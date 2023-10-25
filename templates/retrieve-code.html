@@ -36,6 +36,10 @@
                     <li><h1 class="text-6xl text-white/80 font-extrabold tracking-widest">XXXXX</h1><p class="text-xs text-white/60 font-light font-mono leading-3">XXXXX, XX XXX XXXX</p><p class="text-xs text-white/60 font-light font-mono leading-5">XX:XX</p></li>
                     <li><h1 class="text-6xl text-white/80 font-extrabold tracking-widest">XXXXX</h1><p class="text-xs text-white/60 font-light font-mono leading-3">XXXXX, XX XXX XXXX</p><p class="text-xs text-white/60 font-light font-mono leading-5">XX:XX</p></li>`
 
+    // Change these values to adjust poll frequency
+    const poll_expiry_duration = 10000
+    const poll_interval_duration = 4000
+
     const constructAlert = (svgHtml,title,description) =>{
         a = `
                 <div class="pointer-events-auto w-full md:w-1/3 max-w-sm overflow-hidden rounded-lg bg-white/90 shadow-lg ring-1 ring-white ring-opacity-5">
@@ -72,7 +76,7 @@
     }
     const startPollingBtn = (start_time) =>{
         disableBtn()
-        elapsed_percentage = 100 - ((((start_time+30000) - Date.now())/30000)*100)
+        elapsed_percentage = 100 - ((((start_time+poll_expiry_duration) - Date.now())/poll_expiry_duration)*100)
 
         // changes btn text to Polling
         $("#retrieve-code-btn").contents().filter(function(){ 
@@ -105,9 +109,9 @@
                 startPollingBtn(start_time)
             }
 
-            // Check if its been >30 seconds of polling since start_time
+            // Check if its been >poll_expiry_duration of polling since start_time
             if (!run_once && invocation > 0){
-                expiry_time = start_time + 30000 //30s expiry
+                expiry_time = start_time + poll_expiry_duration // expiry
                 if (Date.now() > expiry_time){
                     stopPollingBtn() // update btn
                     return
@@ -162,16 +166,16 @@
     }
 
     $(document).ready(function(){
-        showMessage("'Poll' attempts to retrieve your code multiple times over 30 seconds")
+        showMessage(`'Poll' attempts to retrieve your code multiple times over ${poll_expiry_duration/1000} seconds`)
         $("#retrieve-code-btn").hide()
         stopPollingBtn()
         // poll once on page load
         pollCodes(true,0)
         $("#retrieve-code-btn").click((e)=>{
             e.preventDefault()
-            // poll server every 5 seconds for 30 seconds
-            // remember to disable button after click
-            pollCodes(false, 5000);
+            // poll server every {poll_interval_duration} seconds for {poll_expiry_duration} seconds
+            // disable button after click
+            pollCodes(false, poll_interval_duration);
         })
     })
 </script>

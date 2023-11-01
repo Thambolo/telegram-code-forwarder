@@ -5,13 +5,13 @@ import os
 from re import sub, search
 from sqlite3 import OperationalError
 from inspect import isawaitable
-from flask import Flask, redirect, render_template, request, session, url_for
+from flask import Flask, redirect, render_template, request, session, url_for, flash
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user, UserMixin
 from telethon import TelegramClient, errors
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import FlaskForm, RecaptchaField
-from wtforms import StringField, PasswordField, SubmitField
-from wtforms.validators import InputRequired, Length, ValidationError, EqualTo, Regexp
+from wtforms import StringField, PasswordField, SubmitField, IntegerField
+from wtforms.validators import InputRequired, Length, ValidationError, EqualTo, Regexp, NumberRange
 from flask_bcrypt import Bcrypt
 from markupsafe import escape
 
@@ -85,6 +85,27 @@ class LoginForm(FlaskForm):
     submit = SubmitField("Login")
 
 
+class TelePhoneForm(FlaskForm):
+    phone = StringField(validators=[InputRequired(message="Empty field"), Length(
+        min=11, max=11), Regexp("\+65(9|8)\d{7}", message="Only accepts +65XXXXXXXX")], render_kw={})
+
+    submit = SubmitField("Next")
+
+
+class TeleCodeForm(FlaskForm):
+    code = IntegerField(validators=[InputRequired(
+        message="Empty field"), NumberRange(min=10000, max=99999, message="Only five digits allowed")], render_kw={})
+
+    submit = SubmitField("Next")
+
+
+class Tele2faForm(FlaskForm):
+    password = PasswordField(validators=[InputRequired(
+        "Empty field"), Length(max=30)], render_kw={})
+
+    submit = SubmitField("Login")
+
+
 # Credentials from my.telegram.org
 API_ID = os.environ["TELE_API_ID"]
 API_HASH = os.environ["TELE_API_HASH"]
@@ -100,34 +121,12 @@ def parse_phone(phone):
             return phone
 
 
-def phone_validated(phone):
-    # escaping
-    phone = escape(phone)
-
-    # match Singapore phone format
-    phone_match = search("\+65(9|8)\d{7}", phone)
-
-    if phone_match is None:
-        return False
-    else:
-        return True
-
-
-def code_validated(code_given):
-
-    if code_given is not None:
-        # match 5 digit login code
-        return len(str(code_given)) == 5
-
-    return False
-
-
-def password_validated(password):
-
-    if (password is not None) and (password):
-        return True
-
-    return False
+async def clear_tele_sessionkeys():
+    keylist = list(session.keys())
+    for key in keylist:
+        # pop only telegram related session keys (starts with tele_)
+        if key.startswith('tele_'):
+            session.pop(key)
 
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -183,208 +182,243 @@ async def tele_login():
     # loop = asyncio.new_event_loop()
     # asyncio.set_event_loop(loop)
 
-    if request.method == "POST":
-
-        phone = request.form.get("phone")
-
-        # phone number validation
-        if not phone_validated(phone):
-            return {"errors": ["Must follow the format +65XXXXXXXX"]}, 400
-
-        # Activate telethon login process
-        client = TelegramClient(
-            f'{THIS_FOLDER}/tele_sessions/{current_user.id}_{current_user.username}', API_ID, API_HASH)
-
-        # Connect to Telegram
-        try:
-            if not client.is_connected():
-                await client.connect()
-        except OperationalError:
-            response = {
-                'message': 'There is a Telegram session in use in this account, terminate it to solve issues.'
-            }
-            return response, 200
-
-        # General check
-        me = await client.get_me()
-        if me is not None:
-            # The warnings here are on a best-effort and may fail.
-            if parse_phone(phone) != me.phone:
-                await client.disconnect()
-
-                return {'message': 'The logged in session\'s phone number differs from the one received, terminate the session to use a new number', 'code_sent': False, 'logged_in': False}, 200
-
-            await client.disconnect()
-            return {'message': 'Logged in', 'code_sent': False, 'logged_in': True}, 200
-        else:
-            # Validate phone number
-            while callable(phone):
-                value = phone()
-                if isawaitable(value):
-                    value = await value
-                phone = parse_phone(value) or phone
-
-            # Send telegram code
-            sendcode = await client.send_code_request(phone, force_sms=False)
-
-            # Store info in session
-            session['tele_phone'] = phone
-            session['tele_phone_code_hash'] = sendcode.phone_code_hash
-
-            response = {
-                'message': 'Login code has been sent',
-                'code_sent': True,
-                'logged_in': False,
-            }
-            await client.disconnect()
-            return response, 200
-
-    return render_template("tele-login.html")
-
-# Retrieve telegram code from user
-
-
-@app.route("/code", methods=["POST"])
-@login_required
-async def code():
-
-    if request.method == "POST":
-
-        # Set the Client session to be used based on current user logged in
-        client = TelegramClient(
-            f'{THIS_FOLDER}/tele_sessions/{current_user.id}_{current_user.username}', API_ID, API_HASH)
-
-        # Connect to Telegram if not connected
-        if not client.is_connected():
-            await client.connect()
-
-        if "tele_code_max_attempt_expiry" in session:
-            if (session['tele_code_max_attempt_expiry'] <= datetime.now(timezone.utc)):
-                session.pop("tele_code_attempts")
-                session.pop("tele_code_max_attempt_expiry")
-
-        if "tele_code_attempts" not in session:
-            session['tele_code_attempts'] = 0
-
-        phone = session['tele_phone']
-        max_attempts = 3
-        two_step_detected = False
-
-        # Validate telegram code from client
-        while (int(session["tele_code_attempts"]) < max_attempts):
-            try:
-                # I NEED TO SELF DEFINE THE WAY IT GETS THE CODE FROM USER HERE
-                code_given = request.form.get("code", type=int)
-
-                # code format validation
-                if not code_validated(code_given):
-                    return {"errors": ["Invalid length"]}, 400
-
-                if isawaitable(code_given):
-                    code_given = await code_given
-
-                # Since sign-in with no code works (it sends the code)
-                # we must double-check that here. Else we'll assume we
-                # logged in, and it will return None as the User.
-                if not code_given:
-                    # no code received
-                    return {"message": "Invalid code, try again."}, 400
-
-                # Raises SessionPasswordNeededError if 2FA enabled
-                await client.sign_in(phone, code=code_given, phone_code_hash=session['tele_phone_code_hash'])
-                break
-            except errors.SessionPasswordNeededError:
-                two_step_detected = True
-                session['tele_2FA'] = two_step_detected
-                break
-            except (errors.PhoneCodeEmptyError,
-                    errors.PhoneCodeExpiredError,
-                    errors.PhoneCodeHashEmptyError,
-                    errors.PhoneCodeInvalidError):
-                return {"message": "Invalid code, try again."}, 400
-
-            finally:
-                session["tele_code_attempts"] += 1
-
-        else:
-
-            if 'tele_code_max_attempt_expiry' not in session:
-                session['tele_code_max_attempt_expiry'] = datetime.now(
-                    timezone.utc) + timedelta(seconds=60)
-
-            client.disconnect()
-
-            return {"message": f'{max_attempts} consecutive sign-in attempts failed, wait 60 seconds to try again'}, 400
-
-        await client.disconnect()
-
-        # Clear attempts (since if code reached here, means it passed)
-        session.pop("tele_code_attempts")
-
-        return {"two_step_detected": two_step_detected, "message": f'{"2FA required" if two_step_detected else "You are logged in!" }'}, 200
-
-
-# Retrieve telegram 2FA from user when called
-
-
-@app.route("/2fa", methods=["POST"])
-@login_required
-async def get2FA():
-
-    two_step_detected = session['tele_2FA']
-    password = request.form.get("2fa")
-
-    if not password_validated(password):
-        return {"errors": ["Password invalid"]}, 400
+    form = TelePhoneForm()
 
     client = TelegramClient(
         f'{THIS_FOLDER}/tele_sessions/{current_user.id}_{current_user.username}', API_ID, API_HASH)
 
     # Connect to Telegram
-    if not client.is_connected():
-        await client.connect()
+    try:
+        if not client.is_connected():
+            await client.connect()
+    except OperationalError:
 
-    max_attempts = 3
-    me = None
-    phone = session['tele_phone']
+        flash(message="There is a Telegram session in use in this account, terminate it to solve issues",
+              category="Warning")
+        return redirect(url_for("tele_login"))
 
-    # Validate 2FA if 2FA is requested
-    if two_step_detected:
+    # Check if already logged in
+    me = await client.get_me()
+    if me is not None:
 
-        if callable(password):
-            for _ in range(max_attempts):
+        await client.disconnect()
+
+        # already logged in, no code sent
+        # flash(message="Already logged in",
+        #       category="Info")
+
+        return redirect(url_for("retrieve_code"))
+
+    if request.method == "POST":
+
+        if form.validate_on_submit():
+
+            phone = form.phone.data
+
+            # General check. The warnings here are on a best-effort and may fail.
+            me = await client.get_me()
+            if (me is not None) and (parse_phone(phone) != me.phone):
+                # The warnings here are on a best-effort and may fail.
+                await client.disconnect()
+
+                # Not logged in, no code sent
+                flash(message="The logged in session\'s phone number differs from the one received, terminate the session to use a new number",
+                      category="Warning")
+                return redirect(url_for("tele_login"))
+
+            else:
+
+                # Send telegram code
                 try:
-                    value = password()
-                    if isawaitable(value):
-                        value = await value
+                    sendcode = await client.send_code_request(phone, force_sms=False)
 
-                    me = await client.sign_in(phone=phone, password=value)
-                    break  # break will leave the loop, skips the else:
+                except errors.PhonePasswordFloodError:
+                    flash(message="Too many login attempt failures, floodwaited",
+                          category="Error")
+
+                    return redirect(url_for("tele_logout"))
+
+                # Store info in session
+                session['tele_phone'] = phone
+                session['tele_phone_code_hash'] = sendcode.phone_code_hash
+
+                await client.disconnect()
+
+                # print(session)
+
+                return redirect(url_for("code"))
+
+    return render_template("tele-login.html", form=form)
+
+# Retrieve telegram code from user
+
+
+@app.route("/code", methods=["GET", "POST"])
+@login_required
+async def code():
+
+    # redirect to phone form if no tele_phone session key
+    if "tele_phone" not in session:
+        return redirect(url_for("tele_login"))
+
+    form = TeleCodeForm()
+
+    if request.method == "POST":
+
+        if form.validate_on_submit():
+
+            # Set the Client session to be used based on current user logged in
+            client = TelegramClient(
+                f'{THIS_FOLDER}/tele_sessions/{current_user.id}_{current_user.username}', API_ID, API_HASH)
+
+            # Connect to Telegram if not connected
+            if not client.is_connected():
+                await client.connect()
+
+            if "tele_code_max_attempt_expiry" in session:
+                if (session['tele_code_max_attempt_expiry'] <= datetime.now(timezone.utc)):
+                    session.pop("tele_code_attempts")
+                    session.pop("tele_code_max_attempt_expiry")
+
+            if "tele_code_attempts" not in session:
+                session['tele_code_attempts'] = 0
+
+            phone = session['tele_phone']
+            max_attempts = 3
+            two_step_detected = False
+
+            # Validate telegram code from client
+            while (int(session["tele_code_attempts"]) < max_attempts):
+                try:
+                    # I NEED TO SELF DEFINE THE WAY IT GETS THE CODE FROM USER HERE
+                    code_given = form.code.data
+
+                    # Raises SessionPasswordNeededError if 2FA enabled
+                    await client.sign_in(phone, code=code_given, phone_code_hash=session['tele_phone_code_hash'])
+                    break
+                except errors.SessionPasswordNeededError:
+                    two_step_detected = True
+                    session['tele_2FA'] = two_step_detected
+                    break
+                except (errors.PhoneCodeEmptyError,
+                        errors.PhoneCodeExpiredError,
+                        errors.PhoneCodeHashEmptyError,
+                        errors.PhoneCodeInvalidError):
+                    flash(message="Invalid code, try again",
+                          category="Warning")
+                    return redirect(url_for("code"))
+
+                finally:
+                    session["tele_code_attempts"] += 1
+
+            else:
+
+                if 'tele_code_max_attempt_expiry' not in session:
+                    session['tele_code_max_attempt_expiry'] = datetime.now(
+                        timezone.utc) + timedelta(seconds=60)
+
+                await client.disconnect()
+
+                flash(message=f'{max_attempts} consecutive sign-in attempts failed, wait 60 seconds to try again',
+                      category="Error")
+                return redirect(url_for("code"))
+
+            # Clear attempts (since if code reached here, means it passed)
+            session.pop("tele_code_attempts")
+
+            # print(session)
+
+            if two_step_detected:
+                await client.disconnect()
+
+                return redirect(url_for("get2FA"))
+            else:
+                me = await client.get_me()
+                session["tele_user"] = me.username
+                await client.disconnect()
+                await clear_tele_sessionkeys()
+
+                return redirect(url_for("retrieve_code"))
+
+    return render_template("tele-login-code.html", form=form, phone=session["tele_phone"])
+
+
+# Retrieve telegram 2FA from user when called
+
+
+@app.route("/2fa", methods=["GET", "POST"])
+@login_required
+async def get2FA():
+
+    if "tele_2FA" not in session:
+        return redirect(url_for("code"))
+
+    form = Tele2faForm()
+
+    if request.method == "POST":
+
+        # Check if maxed attempts
+        if "tele_2FA_remaining_attempts" in session:
+            if session["tele_2FA_remaining_attempts"] == 0:
+                return redirect(url_for("tele_logout"))
+
+        if form.validate_on_submit():
+
+            two_step_detected = session['tele_2FA']
+            password = form.password.data
+
+            client = TelegramClient(
+                f'{THIS_FOLDER}/tele_sessions/{current_user.id}_{current_user.username}', API_ID, API_HASH)
+
+            # Connect to Telegram
+            if not client.is_connected():
+                await client.connect()
+
+            # initialise attempts remaining on first invocation only
+            if "tele_2FA_remaining_attempts" not in session:
+                session["tele_2FA_remaining_attempts"] = 3
+
+            me = None
+            phone = session['tele_phone']
+
+            # Validate 2FA if 2FA is requested
+            if two_step_detected:
+
+                try:
+                    me = await client.sign_in(phone=phone, password=password)
 
                 except errors.PasswordHashInvalidError:
-                    # return will leave the loop, skips the else:
-                    return {"message": "Invalid password, try again."}, 200
-            else:
-                # Reaches here if max attempts reached
-                return {"message": f'{max_attempts} consecutive password attempts failed'}, 200
-        else:
-            me = await client.sign_in(phone=phone, password=password)
+                    session["tele_2FA_remaining_attempts"] -= 1
 
-    # We won't reach here if any step failed (exit by exception)
-    # Success!
-    signed, name = 'Signed in successfully as ', me.first_name
-    tos = '; remember to not break the ToS or you will risk an account ban!'
+                    if session["tele_2FA_remaining_attempts"] == 0:
+                        return redirect(url_for("tele_logout"))
 
-    try:
-        print(signed, name, tos, sep='')
-    except UnicodeEncodeError:
-        # Some terminals don't support certain characters
-        print(signed, name.encode('utf-8', errors='ignore')
-              .decode('ascii', errors='ignore'), tos, sep='')
+                    flash(message="Invalid password, try again",
+                          category="message")
 
-    await client.disconnect()
+                    return render_template("tele-login-2fa.html", form=form)
 
-    return {"message": "2FA successful, you are logged in"}, 200
+                except errors.rpcerrorlist.FloodWaitError as err:
+
+                    flash(message=f"Too many login failures, wait for {err.seconds} seconds to try again",
+                          category="message")
+
+                    return redirect(url_for("tele_logout"))
+
+            # We won't reach here if any step failed (exit by exception)
+            # Success!
+            session.pop("tele_2FA_remaining_attempts")
+
+            if "tele_user" not in session:
+                session["tele_user"] = me.username
+
+            await clear_tele_sessionkeys()
+
+            await client.disconnect()
+
+            return redirect(url_for("retrieve_code"))
+
+    return render_template("tele-login-2fa.html", form=form)
 
 
 @app.route("/retrieve-code", methods=["GET"])
@@ -463,11 +497,7 @@ async def retrieve_code_btn():
 @login_required
 async def tele_logout():
 
-    keylist = list(session.keys())
-    for key in keylist:
-        # pop only telegram related session keys (starts with tele_)
-        if key.startswith('tele_'):
-            session.pop(key)
+    await clear_tele_sessionkeys()
 
     # Connect to Telegram
     client = TelegramClient(

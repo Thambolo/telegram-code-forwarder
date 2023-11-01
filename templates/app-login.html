@@ -23,7 +23,7 @@
             <div>
               <label for="username" class="block text-sm font-medium leading-6 text-white">Username</label>
               <div class="mt-2">
-                {{ form.username(class_="block w-full rounded-md border-0 bg-white/5 py-1.5 pr-10 text-white invalid:text-red-500 ring-1 ring-inset ring-white/10 invalid:ring-1 invalid:ring-inset invalid:ring-red-500 placeholder:invalid:text-red-300 focus:ring-2 focus:ring-inset focus:ring-indigo-500 focus:invalid:ring-2 focus:invalid:ring-inset focus:invalid:ring-red-500 sm:text-sm sm:leading-6") }}
+                {{ form.username(class_="block w-full rounded-md border-0 bg-white/5 py-1.5 pr-10 text-white ring-1 ring-inset ring-white/10 invalid:ring-1 invalid:ring-inset invalid:ring-red-500 placeholder:invalid:text-red-300 focus:ring-2 focus:ring-inset focus:ring-indigo-500 focus:invalid:ring-2 focus:invalid:ring-inset focus:invalid:ring-red-500 sm:text-sm sm:leading-6") }}
                 {% if form.username.errors %}
                   {% for error in form.username.errors %}
                     <p class="mt-2 text-xs text-red-300">{{ error }}</p>
@@ -40,7 +40,7 @@
                 </div>
               </div>
               <div class="mt-2">
-                {{ form.password(class_="block w-full rounded-md border-0 bg-white/5 py-1.5 pr-10 text-white invalid:text-red-500 ring-1 ring-inset ring-white/10 invalid:ring-1 invalid:ring-inset invalid:ring-red-500 placeholder:invalid:text-red-300 focus:ring-2 focus:ring-inset focus:ring-indigo-500 focus:invalid:ring-2 focus:invalid:ring-inset focus:invalid:ring-red-500 sm:text-sm sm:leading-6") }}
+                {{ form.password(class_="block w-full rounded-md border-0 bg-white/5 py-1.5 pr-10 text-white ring-1 ring-inset ring-white/10 invalid:ring-1 invalid:ring-inset invalid:ring-red-500 placeholder:invalid:text-red-300 focus:ring-2 focus:ring-inset focus:ring-indigo-500 focus:invalid:ring-2 focus:invalid:ring-inset focus:invalid:ring-red-500 sm:text-sm sm:leading-6") }}
                 {% if form.password.errors %}
                   {% for error in form.password.errors %}
                     <p class="mt-2 text-xs text-red-300">{{ error }}</p>

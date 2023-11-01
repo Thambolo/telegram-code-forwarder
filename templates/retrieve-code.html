@@ -19,12 +19,41 @@
                 Poll
                 <div id="spinner" style="border-top-color:transparent" class="w-5 h-5 border-4 border-yellow-500 border-solid rounded-full animate-spin"></div>
             </button>
-            <!-- <button id="retrieve-code-btn" class="w-full md:w-auto text-center rounded-md bg-indigo-500 px-4 py-1.5 text-sm font-semibold leading-6 text-white shadow-sm hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500">Poll</button> -->
         </div>
     </div>
     
 </div>
 
+{% endblock %}
+
+{% block alerts %}
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+    <div class="pointer-events-auto w-full md:w-1/3 max-w-sm overflow-hidden rounded-lg bg-white/90 shadow-lg ring-1 ring-white ring-opacity-5">
+      <div class="p-4">
+        <div class="flex items-start">
+          <div class="flex-shrink-0 mt-1">
+            <svg class="h-6 w-6" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" fill="#4d6aff" stroke="#4d6aff"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"><path fill="#3d5dff" d="M512 64a448 448 0 1 1 0 896 448 448 0 0 1 0-896zm0 192a58.432 58.432 0 0 0-58.24 63.744l23.36 256.384a35.072 35.072 0 0 0 69.76 0l23.296-256.384A58.432 58.432 0 0 0 512 256zm0 512a51.2 51.2 0 1 0 0-102.4 51.2 51.2 0 0 0 0 102.4z"></path></g></svg>
+          </div>
+          <div class="ml-3 w-0 flex-1">
+            <p class="text-sm md:text-lg font-semibold text-gray-900 leading-none">{{category}}</p>
+            <p class="mt-1 text-sm text-gray-900">{{message}}</p>
+          </div>
+          <div class="ml-4 flex flex-shrink-0">
+            <button onclick="hideMessage(this)" type="button" class="inline-flex rounded-md bg-white text-gray-400/90 hover:text-gray-500/90 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+              <span class="sr-only">Close</span>
+              <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
 {% endblock %}
 
 {% block scripts %}
@@ -42,18 +71,18 @@
 
     const constructAlert = (svgHtml,title,description) =>{
         a = `
-                <div class="pointer-events-auto w-full md:w-1/3 max-w-sm overflow-hidden rounded-lg bg-white/90 shadow-lg ring-1 ring-white ring-opacity-5">
+                <div class="pointer-events-auto w-full md:w-1/3 max-w-sm overflow-hidden rounded-lg bg-gray-800 shadow-lg ring-inset ring-2 ring-indigo-800/50">
                     <div class="p-4">
                       <div class="flex items-start">
                         <div class="flex-shrink-0 mt-1">
                           ${svgHtml}
                         </div>
                         <div class="ml-3 w-0 flex-1">
-                          <p class="text-sm md:text-lg font-semibold text-gray-900 leading-none">${title}</p>
-                          <p class="mt-1 text-sm text-gray-900">${description}</p>
+                          <p class="text-sm md:text-lg font-semibold text-white/80 leading-none">${title}</p>
+                          <p class="mt-1 text-sm text-white/80">${description}</p>
                         </div>
-                        <div class="ml-4 flex flex-shrink-0">
-                          <button onclick="hideMessage(this)" type="button" class="inline-flex rounded-md bg-white text-gray-400/90 hover:text-gray-500/90 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                        <div class="ml-0 flex flex-shrink-0">
+                          <button onclick="hideMessage(this)" type="button" class="inline-flex rounded-md bg-transparent text-indigo-400 hover:text-gray-500/90 focus:outline-none">
                             <span class="sr-only">Close</span>
                             <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                               <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
@@ -67,10 +96,7 @@
         $("#construct-alert > div").append(a)
     }
 
-    const hideMessage = (el) =>{
-        $(el).parent().parent().parent().parent().remove()
-    }
-    const showMessage = (message,id) =>{
+    const showMessage = (message) =>{
         svgHtml = `<svg class="h-6 w-6" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" fill="#4d6aff" stroke="#4d6aff"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"><path fill="#3d5dff" d="M512 64a448 448 0 1 1 0 896 448 448 0 0 1 0-896zm0 192a58.432 58.432 0 0 0-58.24 63.744l23.36 256.384a35.072 35.072 0 0 0 69.76 0l23.296-256.384A58.432 58.432 0 0 0 512 256zm0 512a51.2 51.2 0 1 0 0-102.4 51.2 51.2 0 0 0 0 102.4z"></path></g></svg>`
         constructAlert(svgHtml,"Information",message)
     }

@@ -4,7 +4,6 @@ from pathlib import Path
 import os
 from re import sub, search
 from sqlite3 import OperationalError
-from inspect import isawaitable
 from flask import Flask, redirect, render_template, request, session, url_for, flash
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user, UserMixin
 from telethon import TelegramClient, errors
@@ -394,14 +393,14 @@ async def get2FA():
                         return redirect(url_for("tele_logout"))
 
                     flash(message="Invalid password, try again",
-                          category="message")
+                          category="Warning")
 
                     return render_template("tele-login-2fa.html", form=form)
 
                 except errors.rpcerrorlist.FloodWaitError as err:
 
                     flash(message=f"Too many login failures, wait for {err.seconds} seconds to try again",
-                          category="message")
+                          category="Warning")
 
                     return redirect(url_for("tele_logout"))
 
@@ -424,6 +423,17 @@ async def get2FA():
 @app.route("/retrieve-code", methods=["GET"])
 @login_required
 async def retrieve_code():
+
+    client = TelegramClient(
+        f'{THIS_FOLDER}/tele_sessions/{current_user.id}_{current_user.username}', API_ID, API_HASH)
+
+    # Connect to Telegram
+    if not client.is_connected():
+        await client.connect()
+
+    # only allow access to this route if logged in on telegram
+    if not await client.is_user_authorized():
+        return redirect(url_for("tele_login"))
 
     return render_template("retrieve-code.html", )
 
@@ -509,14 +519,3 @@ async def tele_logout():
     await client.log_out()
 
     return redirect(url_for("tele_login"))
-
-
-@app.route("/test", methods=["GET", "POST"])
-@login_required
-async def test():
-    if request.method == "POST":
-        print(request.form.get("test"))
-
-    print("TESSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSTTTTTTTTTTTTTTTTTT")
-
-    return render_template("test.html")

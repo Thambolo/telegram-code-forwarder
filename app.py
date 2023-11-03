@@ -13,10 +13,17 @@ from wtforms import StringField, PasswordField, SubmitField, IntegerField
 from wtforms.validators import InputRequired, Length, ValidationError, EqualTo, Regexp, NumberRange
 from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
+import sentry_sdk
 
 load_dotenv()  # take environment variables from .env
 
-# Init
+# Init sentry (REMOVE IF NOT USING SENTRY)
+sentry_sdk.init(
+    dsn=os.environ['SENTRY_DSN'],
+    enable_tracing=True
+)
+
+# Init app
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
 app.secret_key = os.environ["APP_SECRET_KEY"]

@@ -20,6 +20,7 @@ APP_SECRET_KEY=
 # From my.telegram.org
 TELE_API_HASH=
 TELE_API_ID=
+# Get DSN by signing up and creating project at https://sentry.io
 SENTRY_DSN=
 ```
 5. Create the user db using the user class defined in app.py (Or drop in the db if I sent u):\

@@ -12,8 +12,6 @@ from flask_wtf import FlaskForm, RecaptchaField
 from wtforms import StringField, PasswordField, SubmitField, IntegerField
 from wtforms.validators import InputRequired, Length, ValidationError, EqualTo, Regexp, NumberRange
 from flask_bcrypt import Bcrypt
-from markupsafe import escape
-
 from dotenv import load_dotenv
 
 load_dotenv()  # take environment variables from .env
@@ -144,7 +142,6 @@ async def register():
 
 @app.route('/login', methods=['GET', 'POST'])
 async def login():
-
     form = LoginForm()
     if request.method == "POST":
 
@@ -519,3 +516,15 @@ async def tele_logout():
     await client.log_out()
 
     return redirect(url_for("tele_login"))
+
+
+@app.errorhandler(500)
+def internal_server_error(e):
+    # note that we set the 500 status explicitly
+    return render_template('error.html', svgName="sardine", statuscode=500, title="Internal Server Error", msg="Oops... we made a mistake in this anemone, sorry!"), 500
+
+
+@app.errorhandler(404)
+def not_found_error(e):
+    # note that we set the 404 status explicitly
+    return render_template('error.html', svgName="starfish", statuscode=404, title="Not Found", msg="You entered the wrong anemone"), 404

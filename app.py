@@ -169,6 +169,14 @@ async def logout():
     for key in keylist:
         if not key.startswith('_'):  # pop only non-flask_login session keys
             session.pop(key)
+    # telethon disconnect from telegram (prevent sqlite3.OperationalError:database is locked)
+    client = TelegramClient(
+        f'{THIS_FOLDER}/tele_sessions/{current_user.id}_{current_user.username}', API_ID, API_HASH)
+
+    if not client.is_connected():
+        await client.connect()
+
+    await client.disconnect()
 
     # flask-login logout function
     logout_user()
@@ -437,7 +445,11 @@ async def retrieve_code():
 
     # only allow access to this route if logged in on telegram
     if not await client.is_user_authorized():
+        await client.disconnect()
+
         return redirect(url_for("tele_login"))
+
+    await client.disconnect()
 
     return render_template("retrieve-code.html", )
 
@@ -535,3 +547,15 @@ def internal_server_error(e):
 def not_found_error(e):
     # note that we set the 404 status explicitly
     return render_template('error.html', svgName="starfish", statuscode=404, title="Not Found", msg="You entered the wrong anemone"), 404
+
+
+@app.errorhandler(OperationalError)
+async def telethon_database_locked(e):
+
+    client = TelegramClient(
+        f'{THIS_FOLDER}/tele_sessions/{current_user.id}_{current_user.username}', API_ID, API_HASH)
+
+    if client.is_connected():
+        await client.disconnect()
+
+    return redirect(location=request.path)

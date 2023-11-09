@@ -8,10 +8,6 @@
 
 <div class="flex min-h-full flex-col justify-center px-6 py-12 lg:px-8">
     <div id="codes-container" class="mt-0 max-w-md mx-auto w-full sm:mx-auto sm:w-full sm:max-w-md">
-        <!-- <div id="loading">
-            <div class="animate-ping rounded-full bg-indigo-500 w-10 h-10 absolute top-1/2 left-1/2"></div>
-            <div class="rounded-full bg-indigo-500 w-10 h-10 absolute top-1/2 left-1/2"></div>
-        </div> -->
         <h1 class="text-indigo-500 font-extrabold text-3xl mb-4">Telegram Code Retrieval</h1>
         <ul id="codes" class="text-white"></ul>
         <div class="flex flex-row-reverse mt-8">
@@ -148,8 +144,7 @@
                 
                 if (data.codes.length == 0){
                     showMessage(data.message)
-                    // $("#codes-container").prepend(`<h1 class="flex justify-center items-center text-white font-bold text-3xl">${data.message}.</h1>`)
-                    // $("#message").html(`${data.message}.`)
+                    
                     $("#codes").html(default_li)
 
                 }else{
@@ -173,6 +168,9 @@
                     }
                     $("#codes").html(li_data)
                 }
+
+                showMain()
+
                 // count invocations of this function
                 invocation++
 

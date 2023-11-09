@@ -10,11 +10,98 @@
     <title>{% block title %}{% endblock %}</title>
 </head>
 <body class="h-full">
-        <a class="text-white" href="{{ url_for('logout') }}">App Logout</a>
-        <br>
-        <a class="text-white" href="{{ url_for('tele_logout') }}">Terminate Telegram Session</a>
-        {% block main %}{% endblock %}
-        <div id="construct-alert" aria-live="assertive" class="pointer-events-none fixed inset-0 flex items-end px-4 py-6 sm:items-start sm:p-6">
+        {% if current_user.is_authenticated %}
+        <!-- Off-canvas menu for mobile, show/hide based on off-canvas menu state. -->
+        <div class="relative z-50 hidden" id="mobileSidebar" role="dialog" aria-modal="true">
+            <!-- Overlay backdrop -->
+            <div class="fixed inset-0 bg-gray-900/80"></div>
+
+            <div class="fixed inset-0 flex">
+    
+            <div class="relative mr-16 flex w-full max-w-xs flex-1">
+                <!-- Close sidebar button -->
+                <div class="absolute left-full top-0 flex w-16 justify-center pt-5">
+                    <button type="button" onclick="closeMobileSidebar()" class="-m-2.5 p-2.5">
+                        <span class="sr-only">Close sidebar</span>
+                        <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Sidebar component, swap this element with another sidebar if you like -->
+                <div class="flex grow flex-col gap-y-5 overflow-y-auto bg-gray-900 px-6 pb-2 ring-1 ring-white/10">
+                    <div class="flex h-16 shrink-0 items-center">
+                        <img class="h-8 w-auto" src="https://tailwindui.com/img/logos/mark.svg?color=indigo&shade=500" alt="Your Company">
+                    </div>
+                    <nav class="flex flex-1 flex-col">
+                        <ul role="list" class="flex flex-1 flex-col gap-y-7">
+                        <li>
+                            <ul role="list" class="-mx-2 space-y-1">
+                            <li>
+                                <!-- Current: "bg-gray-800 text-white", Default: "text-gray-400 hover:text-white hover:bg-gray-800" -->
+                                <a href="{{url_for('logout')}}" class="hover:bg-gray-800 text-white group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold items-center">
+                                    <img class="h-5 w-5 shrink-0" src="{{url_for('static',filename='images/logout.svg')}}">
+                                    Log Out
+                                </a>
+                            </li>
+                            <li>
+                                <div>
+                                <button type="button" onclick="toggleSubNav(this)" class="hover:bg-gray-800 focus:bg-gray-800 flex items-center w-full text-left rounded-md p-2 gap-x-3 text-sm leading-6 font-semibold text-white" aria-controls="sub-menu-1" aria-expanded="false">
+                                    <!-- Expanded: "rotate-90 text-gray-500", Collapsed: "text-gray-400" -->
+                                    <svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" class="h-6 w-auto shrink-0 fill-indigo-500" viewBox="0,0,256,256"><!-- style="fill:#5c7cfa" fill="#5c7cfa"-->
+                                        <g transform="translate(-10.24,-10.24) scale(1.08,1.08)"><g fill-rule="nonzero" stroke="none" stroke-width="1" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="10" stroke-dasharray="" stroke-dashoffset="0" font-family="none" font-weight="none" font-size="none" text-anchor="none" style="mix-blend-mode: normal"><g transform="scale(5.12,5.12)"><path d="M25,2c12.703,0 23,10.297 23,23c0,12.703 -10.297,23 -23,23c-12.703,0 -23,-10.297 -23,-23c0,-12.703 10.297,-23 23,-23zM32.934,34.375c0.423,-1.298 2.405,-14.234 2.65,-16.783c0.074,-0.772 -0.17,-1.285 -0.648,-1.514c-0.578,-0.278 -1.434,-0.139 -2.427,0.219c-1.362,0.491 -18.774,7.884 -19.78,8.312c-0.954,0.405 -1.856,0.847 -1.856,1.487c0,0.45 0.267,0.703 1.003,0.966c0.766,0.273 2.695,0.858 3.834,1.172c1.097,0.303 2.346,0.04 3.046,-0.395c0.742,-0.461 9.305,-6.191 9.92,-6.693c0.614,-0.502 1.104,0.141 0.602,0.644c-0.502,0.502 -6.38,6.207 -7.155,6.997c-0.941,0.959 -0.273,1.953 0.358,2.351c0.721,0.454 5.906,3.932 6.687,4.49c0.781,0.558 1.573,0.811 2.298,0.811c0.725,0 1.107,-0.955 1.468,-2.064z"></path></g></g></g>
+                                    </svg>
+                                    Telegram Code Forwarder
+                                </button>
+                                <!-- Expandable link section, show/hide based on state. -->
+                                <ul class="mt-1 px-2 pl-10" id="sub-menu-1">
+                                    <li>
+                                    <a href="{{url_for('retrieve_code')}}" class="hover:bg-gray-800 block rounded-md py-2 pr-2 pl-9 text-sm leading-6 text-gray-300">Code Retrieval</a>
+                                    </li>
+                                    <li>
+                                    <a href="{{url_for('tele_logout')}}" class="hover:bg-gray-800 block rounded-md py-2 pr-2 pl-9 text-sm leading-6 text-gray-300">Terminate Session</a>
+                                    </li>
+                                </ul>
+                                </div>
+                            </li>
+                            <li>
+                            </ul>
+                        </li>
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+            </div>
+        </div>
+
+        <!-- hamburger menu -->
+        <div class="sticky top-0 z-40 flex items-center gap-x-6 bg-gray-900 px-4 py-4 shadow-sm sm:px-6">
+            <button type="button" class="-m-2.5 p-2.5 text-gray-400" onclick="openMobileSidebar()">
+                <span class="sr-only">Open sidebar</span>
+                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                </svg>
+            </button>
+            <div class="flex-1 text-sm font-semibold leading-6 text-white">{{self.title()}}</div>
+            <a href="#">
+                <span class="sr-only">Your profile</span>
+                <img class="h-8 w-8 rounded-full bg-gray-800" src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="">
+            </a>
+        </div>
+        {% endif %}
+
+        <!-- Loading element -->
+        <div class="flex min-h-full flex-col justify-center py-12 lg:px-8" id="loading">
+            <div class="flex sm:mx-auto sm:w-full sm:max-w-sm justify-center">
+                <img class="h-10 w-10" src="{{url_for('static',filename='images/loading.svg')}}">
+            </div>
+        </div>
+        <span id="main" class="hidden">
+            {% block main %}{% endblock %}
+        </span>
+        
+        <div id="construct-alert" aria-live="assertive" class="pointer-events-none fixed inset-0 flex items-end mt-14 px-4 py-6 sm:items-start sm:p-6">
             <div class="flex w-full flex-col items-center space-y-4 sm:items-end">
                 {% block alerts %}{% endblock %}
             </div>
@@ -28,5 +115,29 @@
     const hideMessage = (el) =>{
         $(el).parent().parent().parent().parent().remove()
     }
+
+    const closeMobileSidebar = () =>{
+        $("#mobileSidebar").hide(300)
+    }
+
+    const openMobileSidebar = () =>{
+        $("#mobileSidebar").show(300)
+    }
+
+    const toggleSubNav = (el) =>{
+        $(el).next("ul").toggle(300)
+
+    }
+
+    const showMain = () =>{
+        $("#loading").hide()
+        $("#main").show()
+    }
+
+    const showLoading = () =>{
+        $("#loading").show()
+        $("#main").hide()
+    }
+    
 </script>
 {% block scripts %}{% endblock %}

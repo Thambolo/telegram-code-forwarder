@@ -2,9 +2,12 @@
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 import os
+import logging
+import logging.handlers
+import logging.config
 from re import sub, search
 from sqlite3 import OperationalError
-from flask import Flask, redirect, render_template, request, session, url_for, flash
+from flask import Flask, redirect, render_template, request, session, url_for, flash, has_request_context
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user, UserMixin
 from telethon import TelegramClient, errors
 from flask_sqlalchemy import SQLAlchemy
@@ -22,6 +25,41 @@ sentry_sdk.init(
     dsn=os.environ['SENTRY_DSN'],
     enable_tracing=True
 )
+
+# Create logger
+app_logger = logging.getLogger()
+
+"""
+Customises default formatter, adds flask request context
+"""
+
+
+class NewFormatter(logging.Formatter):
+    def format(self, record):
+        if has_request_context():
+            record.path = request.path
+            record.remote = request.remote_addr
+        else:
+            record.path = None
+            record.remote = None
+        return super().format(record)
+
+
+app_logger.setLevel(logging.INFO)
+# Create rotating file handler (0.5 mb maxbytes)
+rotate_handler = logging.handlers.RotatingFileHandler(
+    'app.log', maxBytes=50000, backupCount=2)
+# Set the formatter for the handler
+formatter = NewFormatter(
+    '%(remote)s - [%(asctime)s][%(levelname)s]["%(path)s"] %(threadName)s: %(message)s')
+rotate_handler.setFormatter(formatter)
+app_logger.addHandler(rotate_handler)
+
+# Log to console/terminal also
+consoleHandler = logging.StreamHandler()
+consoleHandler.setFormatter(formatter)
+app_logger.addHandler(consoleHandler)
+
 
 # Init app
 app = Flask(__name__)
@@ -142,6 +180,8 @@ async def register():
         new_user = User(username=form.username.data, password=hashed_password)
         db.session.add(new_user)
         db.session.commit()
+
+        app.logger.info("New user '%s' registered", form.username.data)
         return redirect(url_for('login'))
 
     return render_template("app-register.html", form=form)
@@ -157,6 +197,8 @@ async def login():
             if user:
                 if bcrypt.check_password_hash(user.password, form.password.data):
                     login_user(user)
+
+                    app.logger.info("User '%s' logged in", form.username.data)
                     return redirect(url_for('tele_login'))
 
     return render_template('app-login.html', form=form)
@@ -165,10 +207,14 @@ async def login():
 @app.route("/logout")
 @login_required
 async def logout():
+
+    tmp_username = current_user.username
+
     keylist = list(session.keys())
     for key in keylist:
         if not key.startswith('_'):  # pop only non-flask_login session keys
             session.pop(key)
+
     # telethon disconnect from telegram (prevent sqlite3.OperationalError:database is locked)
     client = TelegramClient(
         f'{THIS_FOLDER}/tele_sessions/{current_user.id}_{current_user.username}', API_ID, API_HASH)
@@ -180,6 +226,7 @@ async def logout():
 
     # flask-login logout function
     logout_user()
+    app.logger.info("User '%s' logged out", tmp_username)
     return redirect(url_for('login'))
 
 
@@ -206,6 +253,9 @@ async def tele_login():
 
         flash(message="There is a Telegram session in use in this account, terminate it to solve issues",
               category="Warning")
+
+        app.logger.warning(
+            "There is a Telegram session in use in this account, terminate it to solve issues")
         return redirect(url_for("tele_login"))
 
     # Check if already logged in
@@ -214,10 +264,8 @@ async def tele_login():
 
         await client.disconnect()
 
-        # already logged in, no code sent
-        # flash(message="Already logged in",
-        #       category="Info")
-
+        app.logger.info("User '%s' is already logged in",
+                        current_user.username)
         return redirect(url_for("retrieve_code"))
 
     if request.method == "POST":
@@ -233,8 +281,10 @@ async def tele_login():
                 await client.disconnect()
 
                 # Not logged in, no code sent
-                flash(message="The logged in session\'s phone number differs from the one received, terminate the session to use a new number",
+                flash(message="The logged in Telegram account\'s phone number differs from the one received, terminate the session to use a new number",
                       category="Warning")
+                app.logger.warning(
+                    "User '%s' entered a phone number different from the one in their TelegramClient, they should terminate the session to use a new number", current_user.username)
                 return redirect(url_for("tele_login"))
 
             else:
@@ -246,7 +296,8 @@ async def tele_login():
                 except errors.PhonePasswordFloodError:
                     flash(message="Too many login attempt failures, floodwaited",
                           category="Error")
-
+                    app.logger.error(
+                        "User '%s' is being floodwaited for too many login attempts", current_user.username)
                     return redirect(url_for("tele_logout"))
 
                 # Store info in session
@@ -255,8 +306,8 @@ async def tele_login():
 
                 await client.disconnect()
 
-                # print(session)
-
+                app.logger.info(
+                    "User '%s' successfully passed the Telegram phone form", current_user.username)
                 return redirect(url_for("code"))
 
     return render_template("tele-login.html", form=form)
@@ -270,6 +321,8 @@ async def code():
 
     # redirect to phone form if no tele_phone session key
     if "tele_phone" not in session:
+        app.logger.warning(
+            "User '%s' tried to access Telegram login code form without first completing Telegram phone form", current_user.username)
         return redirect(url_for("tele_login"))
 
     form = TeleCodeForm()
@@ -317,6 +370,8 @@ async def code():
                         errors.PhoneCodeInvalidError):
                     flash(message="Invalid code, try again",
                           category="Warning")
+                    app.logger.warning(
+                        "User '%s' entered an invalid Telegram login code", current_user.username)
                     return redirect(url_for("code"))
 
                 finally:
@@ -332,16 +387,18 @@ async def code():
 
                 flash(message=f'{max_attempts} consecutive sign-in attempts failed, wait 60 seconds to try again',
                       category="Error")
+                app.logger.warning(
+                    "User '%s' has %s consecutive sign-in attempts failed, wait 60 seconds to try again", current_user.username, str(max_attempts))
                 return redirect(url_for("code"))
 
             # Clear attempts (since if code reached here, means it passed)
             session.pop("tele_code_attempts")
 
-            # print(session)
-
             if two_step_detected:
                 await client.disconnect()
 
+                app.logger.info(
+                    "User '%s' successfully passed Telegram login code form", current_user.username)
                 return redirect(url_for("get2FA"))
             else:
                 me = await client.get_me()
@@ -349,6 +406,8 @@ async def code():
                 await client.disconnect()
                 await clear_tele_sessionkeys()
 
+                app.logger.info(
+                    "User '%s' successfully logged into Telegram account '%s'", current_user.username, session["tele_user"])
                 return redirect(url_for("retrieve_code"))
 
     return render_template("tele-login-code.html", form=form, phone=session["tele_phone"])
@@ -362,6 +421,9 @@ async def code():
 async def get2FA():
 
     if "tele_2FA" not in session:
+
+        app.logger.info(
+            "User '%s' tried to access Telegram 2FA form without first completing Telegram login code form", current_user.username)
         return redirect(url_for("code"))
 
     form = Tele2faForm()
@@ -371,6 +433,9 @@ async def get2FA():
         # Check if maxed attempts
         if "tele_2FA_remaining_attempts" in session:
             if session["tele_2FA_remaining_attempts"] == 0:
+
+                app.logger.warning(
+                    "User '%s' has reached maximum of 3 2FA attempts", current_user.username)
                 return redirect(url_for("tele_logout"))
 
         if form.validate_on_submit():
@@ -401,12 +466,13 @@ async def get2FA():
                 except errors.PasswordHashInvalidError:
                     session["tele_2FA_remaining_attempts"] -= 1
 
-                    if session["tele_2FA_remaining_attempts"] == 0:
-                        return redirect(url_for("tele_logout"))
+                    # if session["tele_2FA_remaining_attempts"] == 0:
+                    #     return redirect(url_for("tele_logout"))
 
                     flash(message="Invalid password, try again",
                           category="Warning")
-
+                    app.logger.info(
+                        "User '%s' entered invalid 2FA password and has %s remaining 2FA attempts", current_user.username, session["tele_2FA_remaining_attempts"])
                     return render_template("tele-login-2fa.html", form=form)
 
                 except errors.rpcerrorlist.FloodWaitError as err:
@@ -414,6 +480,8 @@ async def get2FA():
                     flash(message=f"Too many login failures, wait for {err.seconds} seconds to try again",
                           category="Warning")
 
+                    app.logger.warning(
+                        "User '%s' has too many 2FA password failures, wait for %s seconds to try again", current_user.username, str(err.seconds))
                     return redirect(url_for("tele_logout"))
 
             # We won't reach here if any step failed (exit by exception)
@@ -427,6 +495,8 @@ async def get2FA():
 
             await client.disconnect()
 
+            app.logger.info(
+                "User '%s' successfully logged into Telegram account '%s'", current_user.username, session["tele_user"])
             return redirect(url_for("retrieve_code"))
 
     return render_template("tele-login-2fa.html", form=form)
@@ -462,6 +532,8 @@ async def retrieve_code_btn():
     if 'tele_retrieve_code_invoke_expiry' in session:
         current_time = datetime.now(timezone.utc)
         if (current_time < session['tele_retrieve_code_invoke_expiry']) and (session['tele_retrieve_code_invocations'] >= 6):
+            app.logger.warning(
+                "User '%s' exceeded rate-limit of 6 per 30s, wait before polling again", current_user.username)
             return {"codes": [], "message": "Exceeded rate-limit of 6 per 30s, wait before polling again"}, 429
 
         # reset expiry and invoke count if expired (30s from 1st invocation)
@@ -534,19 +606,21 @@ async def tele_logout():
 
     await client.log_out()
 
+    app.logger.info(
+        "User '%s' logged-out/terminated their Telegram session", current_user.username)
     return redirect(url_for("tele_login"))
 
 
 @app.errorhandler(500)
 def internal_server_error(e):
     # note that we set the 500 status explicitly
-    return render_template('error.html', svgName="sardine", statuscode=500, title="Internal Server Error", msg="Oops... we made a mistake in this anemone, sorry!"), 500
+    return render_template('error.html', svgName="sardine", statuscode=500, title="Internal Server Error", msg="Oops... we made a mistake, sorry!"), 500
 
 
 @app.errorhandler(404)
 def not_found_error(e):
     # note that we set the 404 status explicitly
-    return render_template('error.html', svgName="starfish", statuscode=404, title="Not Found", msg="You entered the wrong anemone"), 404
+    return render_template('error.html', svgName="starfish", statuscode=404, title="Not Found", msg="You entered the wrong address"), 404
 
 
 @app.errorhandler(OperationalError)

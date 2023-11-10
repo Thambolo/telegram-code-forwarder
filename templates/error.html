@@ -22,12 +22,16 @@
         {{ msg }}
       </p>
       <p class="mt-4 text-gray-500 dark:text-gray-400">
-        <a href="{{ url_for('tele_login') }}">Try another anemone maybe?</a>
+        <a href="{{ url_for('tele_login') }}">Try another page maybe?</a>
       </p>
     </div>
   </div>
 {% endblock %}
 
 {% block scripts %}
-
+<script>
+  $(document).ready(function(){
+    showMain()
+  })
+  </script>
 {% endblock %}

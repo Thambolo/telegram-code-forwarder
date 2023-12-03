@@ -21,33 +21,7 @@
 {% block wtf_submit %}{{ form.submit(class_="mt-3 inline-flex w-full items-center justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:ml-3 sm:mt-0 sm:w-auto") }}{% endblock %}
 
 {% block alerts %}
-{% with messages = get_flashed_messages(with_categories=true) %}
-  {% if messages %}
-    {% for category, message in messages %}
-    <div class="pointer-events-auto w-full md:w-1/3 max-w-sm overflow-hidden rounded-lg bg-gray-800 shadow-lg ring-inset ring-2 ring-indigo-800/50">
-      <div class="p-4">
-        <div class="flex items-start">
-          <div class="flex-shrink-0">
-            <svg class="h-4 w-4" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" fill="#4d6aff" stroke="#4d6aff"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"><path fill="#3d5dff" d="M512 64a448 448 0 1 1 0 896 448 448 0 0 1 0-896zm0 192a58.432 58.432 0 0 0-58.24 63.744l23.36 256.384a35.072 35.072 0 0 0 69.76 0l23.296-256.384A58.432 58.432 0 0 0 512 256zm0 512a51.2 51.2 0 1 0 0-102.4 51.2 51.2 0 0 0 0 102.4z"></path></g></svg>
-          </div>
-          <div class="ml-3 w-0 flex-1">
-            <p class="text-sm md:text-md font-semibold text-white/80 leading-none">{{category}}</p>
-            <p class="mt-1 text-xs text-white/80">{{message}}</p>
-          </div>
-          <div class="ml-0 flex flex-shrink-0">
-            <button onclick="hideMessage(this)" type="button" class="inline-flex rounded-md bg-transparent text-indigo-400 hover:text-gray-500/90 focus:outline-none">
-              <span class="sr-only">Close</span>
-              <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-    {% endfor %}
-  {% endif %}
-{% endwith %}
+<!--error msgs-->
 {% if form.phone.errors %}
     {% for error in form.phone.errors %}
     <div class="pointer-events-auto w-full md:w-1/3 max-w-sm overflow-hidden rounded-lg bg-gray-800 shadow-lg ring-inset ring-2 ring-red-500/50">

@@ -5,20 +5,36 @@ import os
 import logging
 import logging.handlers
 import logging.config
+import random
 from re import sub, search
+import smtplib
+from email.mime.text import MIMEText
 from sqlite3 import OperationalError
 from flask import Flask, redirect, render_template, request, session, url_for, flash, has_request_context
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user, UserMixin
 from telethon import TelegramClient, errors
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy_utils import UUIDType, EmailType
+import uuid
 from flask_wtf import FlaskForm, RecaptchaField
-from wtforms import StringField, PasswordField, SubmitField, IntegerField
-from wtforms.validators import InputRequired, Length, ValidationError, EqualTo, Regexp, NumberRange
+from wtforms import StringField, PasswordField, SubmitField, IntegerField, EmailField
+from wtforms.validators import InputRequired, Length, ValidationError, EqualTo, Regexp, NumberRange, Email
 from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
 import sentry_sdk
+from functools import wraps
 
 load_dotenv()  # take environment variables from .env
+
+# Path init
+THIS_FOLDER = Path(__file__).parent.resolve()
+
+# Chars used for random unique code generation (does not incl. Uppercase I and Lowercase l to prevent confusion)
+CODE_CHARS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'n', 'm', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D',
+              'E', 'F', 'G', 'H', 'J', 'K', 'N', 'M', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
+
+GMAIL_USERNAME = os.environ["GMAIL_USERNAME"]
+GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
 
 # Init sentry (REMOVE IF NOT USING SENTRY)
 sentry_sdk.init(
@@ -29,12 +45,12 @@ sentry_sdk.init(
 # Create logger
 app_logger = logging.getLogger()
 
-"""
-Customises default formatter, adds flask request context
-"""
-
 
 class NewFormatter(logging.Formatter):
+    """
+    Customises default logging formatter, adds flask request context
+    """
+
     def format(self, record):
         if has_request_context():
             record.path = request.path
@@ -48,7 +64,7 @@ class NewFormatter(logging.Formatter):
 app_logger.setLevel(logging.INFO)
 # Create rotating file handler (0.5 mb maxbytes)
 rotate_handler = logging.handlers.RotatingFileHandler(
-    'app.log', maxBytes=50000, backupCount=2)
+    f'{THIS_FOLDER}/logs/app.log', maxBytes=1000000, backupCount=2)
 # Set the formatter for the handler
 formatter = NewFormatter(
     '%(remote)s - [%(asctime)s][%(levelname)s]["%(path)s"] %(threadName)s: %(message)s')
@@ -78,49 +94,133 @@ login_manager = LoginManager()
 login_manager.login_view = 'login'
 login_manager.init_app(app)
 
-# Path init
-THIS_FOLDER = Path(__file__).parent.resolve()
-
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return User.query.get(user_id)
+
+
+def require_account_verified(temp):
+    """
+    Require a verified account to access an endpoint.
+    Used as a decorator like @require_account_verified
+    """
+    def wrapper(func):
+        @wraps(func)
+        async def wrapped(*args):
+            if not current_user.email_verified:
+                return redirect(url_for("email_verification"))
+            return await func(*args)
+        return wrapped
+    return wrapper(temp)
 
 
 class User(db.Model, UserMixin):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(20), nullable=False, unique=True)
+    """
+    User model for database initialisation.
+
+    Schema update steps:
+    0. Delete current instance/database.db
+    1. Open python shell in terminal `py`
+    2. run `from app import app, db`
+    3. run ```with app.app_context():
+    db.create_all()```
+    """
+    id = db.Column(UUIDType(binary=False),
+                   primary_key=True, default=uuid.uuid4)
+    username = db.Column(EmailType, nullable=False, unique=True)
     password = db.Column(db.String(80), nullable=False)
+
+    email_verified = db.Column(db.Boolean, nullable=False,
+                               unique=False, default=False)
+
+    email_code = db.Column(db.String(80), nullable=True, unique=False)
+    email_code_creation = db.Column(db.DateTime(
+        timezone=True), nullable=True, unique=False)
+
+    forgot_password_code = db.Column(
+        db.String(80), nullable=True, unique=False)
+    forgot_password_code_creation = db.Column(db.DateTime(
+        timezone=True), nullable=True, unique=False)
+
+    is_admin = db.Column(db.Boolean, nullable=False,
+                         unique=False, default=False)
 
 
 class RegisterForm(FlaskForm):
-    username = StringField(validators=[InputRequired(), Length(
-        min=4, max=20), Regexp("^[a-zA-Z0-9]*$", message="Only accepts alphanumeric values")], render_kw={"placeholder": "Username"})
+    """
+    App Registration Form
+    """
+    username = EmailField(validators=[InputRequired(), Email(
+        granular_message=True, check_deliverability=True)], render_kw={"placeholder": "Email"})
 
     password = PasswordField(validators=[InputRequired(), Length(
-        min=4, max=20), EqualTo('password2', message='Passwords must match')], render_kw={"placeholder": "Password"})
+        min=8, max=100), EqualTo('password2', message='Passwords must match')], render_kw={"placeholder": "Password"})
 
-    password2 = PasswordField(validators=[InputRequired(), Length(
-        min=4, max=20)], render_kw={"placeholder": "Confirm Password"})
+    password2 = PasswordField(validators=[InputRequired()], render_kw={
+                              "placeholder": "Confirm Password"})
 
     recaptcha = RecaptchaField()
 
     submit = SubmitField("Register")
 
     def validate_username(self, username):
+        """
+        Ensures no duplicate username in database
+        """
         existing_username = User.query.filter_by(
             username=username.data).first()
         if existing_username:
             self.username.errors += (ValidationError(
-                "That username already exists. Choose a different one."),)
+                "That email has already been registered"),)
+
+
+class EmailVerificationForm(FlaskForm):
+    """
+    Email code verification form
+    """
+    code = StringField(validators=[InputRequired(message="Empty field"), Length(
+        min=8, max=8), Regexp("[a-zA-Z0-9]+", message="One or more characters are invalid")], render_kw={})
+
+    submit = SubmitField("Verify")
+
+
+class ForgotPasswordEmailForm(FlaskForm):
+    """
+    Forgot Password Form (email for sending unique code)
+    """
+    username = EmailField(validators=[InputRequired(), Email(
+        granular_message=True, check_deliverability=True)], render_kw={"placeholder": "Email"})
+
+    submit = SubmitField("Submit")
+
+
+class ForgotPasswordUpdateForm(FlaskForm):
+    """
+    Forgot Password Form (password and code)
+    """
+
+    password = PasswordField(validators=[InputRequired(), Length(
+        min=8, max=100), EqualTo('password2', message='Passwords must match')], render_kw={"placeholder": "Password"})
+
+    password2 = PasswordField(validators=[InputRequired()], render_kw={
+                              "placeholder": "Confirm Password"})
+
+    code = StringField(validators=[InputRequired(message="Empty field"), Length(
+        min=8, max=8), Regexp("[a-zA-Z0-9]+", message="One or more characters are invalid")], render_kw={})
+
+    submit = SubmitField("Submit")
 
 
 class LoginForm(FlaskForm):
-    username = StringField(validators=[InputRequired(message="Username must not be empty"), Length(
-        min=4, max=20), Regexp("^[a-zA-Z0-9]*$", message="Only accepts alphanumeric values")], render_kw={})
+    """
+    App Login Form
+    """
+    username = EmailField(validators=[InputRequired(), Email(
+        granular_message=True, check_deliverability=True)], render_kw={"placeholder": "Email"})
 
     password = PasswordField(validators=[InputRequired(), Length(
-        min=4, max=20)], render_kw={})
+        min=8, max=100)], render_kw={})
 
     recaptcha = RecaptchaField()
 
@@ -128,6 +228,9 @@ class LoginForm(FlaskForm):
 
 
 class TelePhoneForm(FlaskForm):
+    """
+    Telegram Phone Number Form
+    """
     phone = StringField(validators=[InputRequired(message="Empty field"), Length(
         min=11, max=11), Regexp("\+65(9|8)\d{7}", message="Only accepts +65XXXXXXXX")], render_kw={})
 
@@ -135,6 +238,9 @@ class TelePhoneForm(FlaskForm):
 
 
 class TeleCodeForm(FlaskForm):
+    """
+    Telegram Login Code Form
+    """
     code = IntegerField(validators=[InputRequired(
         message="Empty field"), NumberRange(min=10000, max=99999, message="Only five digits allowed")], render_kw={})
 
@@ -142,6 +248,9 @@ class TeleCodeForm(FlaskForm):
 
 
 class Tele2faForm(FlaskForm):
+    """
+    Telgram 2FA Form
+    """
     password = PasswordField(validators=[InputRequired(
         "Empty field"), Length(max=30)], render_kw={})
 
@@ -164,6 +273,10 @@ def parse_phone(phone):
 
 
 async def clear_tele_sessionkeys():
+    """
+    Clears all session keys starting with 'tele_',
+    denoting that it is used for the telegram related routes
+    """
     keylist = list(session.keys())
     for key in keylist:
         # pop only telegram related session keys (starts with tele_)
@@ -187,9 +300,256 @@ async def register():
     return render_template("app-register.html", form=form)
 
 
+@app.route('/email-verification', methods=['GET', 'POST'])
+@login_required
+async def email_verification():
+    """
+    For verification of email account.
+    Route only accessible if email not verified (checked through current_user.email_verified)
+    """
+    if current_user.email_verified:
+        return redirect(url_for("tele_login"))
+
+    form = EmailVerificationForm()
+
+    if request.method == "GET":
+        # control code refresh frequency, only refresh code if past expiry time
+        if current_user.email_code_creation:
+            if ((current_user.email_code_creation + timedelta(minutes=30)).replace(tzinfo=timezone.utc)) >= datetime.now(timezone.utc):
+                return render_template("app-verification.html", form=form)
+        # update the database with a new code and created time
+
+        new_code = ''.join(random.choices(CODE_CHARS, k=8))
+        new_code_time = datetime.now(timezone.utc)
+
+        upd_code = User.query.get_or_404(current_user.id)
+        upd_code.email_code = new_code
+        upd_code.email_code_creation = new_code_time
+
+        db.session.commit()
+
+        # send verification code to email(from current_user)
+        email_text = f"""
+        Hi {current_user.username.split("@")[0]},
+
+        Please ignore this email if you did not request for a verification code.
+
+        Verification code: {new_code}
+        Expires: 30 min or when new code is requested
+
+        Best regards,
+        Thambolo
+        """
+        recipients = [current_user.username]
+        msg = MIMEText(email_text)
+        msg["Subject"] = "Verification Code for Telegram-code-forwarder"
+        msg["To"] = ", ".join(recipients)
+        msg["From"] = GMAIL_USERNAME
+
+        smtp_server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+        smtp_server.login(GMAIL_USERNAME, GMAIL_APP_PASSWORD)
+        try:
+            smtp_server.sendmail(msg["From"], recipients, msg.as_string())
+        finally:
+            smtp_server.quit()
+
+    if request.method == "POST":
+        if form.validate_on_submit():
+
+            # check the form code with the database code and expiry(created time + time till expiry)
+            if current_user.email_code and current_user.email_code_creation:
+
+                if ((current_user.email_code_creation + timedelta(minutes=30)).replace(tzinfo=timezone.utc) <= datetime.now(timezone.utc)):
+
+                    flash(
+                        message="Entered expired code, page has been refreshed to send a new code", category="Info")
+                    app.logger.info(
+                        "User '%s' entered an expired code, attempting to refresh to send a new code", current_user.username)
+
+                    return redirect(url_for("email_verification"))
+
+                # match: update database email_verified to True, nullify email_code and email_code_creation
+                if current_user.email_code == form.code.data:
+
+                    upd_user = User.query.get_or_404(current_user.id)
+                    upd_user.email_code = None
+                    upd_user.email_code_creation = None
+                    upd_user.email_verified = True
+
+                    db.session.commit()
+
+                    flash(message="Account verified", category="Info")
+                    app.logger.info(
+                        "User '%s' successfully verified their account", current_user.username)
+
+                    return redirect(url_for("tele_login"))
+
+                # no match: nullify email_code and email_code_creation, refresh page to retry
+                else:
+
+                    # upd_user = User.query.get_or_404(current_user.id)
+                    # upd_user.email_code = None
+                    # upd_user.email_code_creation = None
+
+                    # db.session.commit()
+
+                    flash(
+                        message="Incorrect email verification code", category="Info")
+                    app.logger.info(
+                        "User '%s' entered an incorrect email verification code", current_user.username)
+
+                    return redirect(url_for('email_verification'))
+
+            app.logger.error(
+                "User '%s's email_code and/or email_code_creation is not available in the database", current_user.username)
+            return redirect(url_for('email_verification'))
+
+    return render_template("app-verification.html", form=form)
+
+# @app.route('/update-username', methods=['GET', 'POST'])
+# async def update_username():
+#     """
+#     Update username (email)
+#     """
+#     form = ForgotPasswordForm()
+
+#     # if request.method == "POST":
+
+#     # if form.validate_on_submit():
+
+#     return render_template('app-forgot-password.html', form=form)
+
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+async def forgot_password():
+    """
+    Forgot Password Page and Email form
+    """
+    email_form = ForgotPasswordEmailForm()
+    update_form = ForgotPasswordUpdateForm()
+
+    if request.method == "POST":
+
+        if email_form.validate_on_submit():
+
+            upd_code = db.session.execute(db.select(User).filter_by(
+                username=email_form.username.data)).scalar_one_or_none()
+
+            if upd_code:
+                # generate code
+                new_code = ''.join(random.choices(CODE_CHARS, k=8))
+                new_code_time = datetime.now(timezone.utc)
+
+                # store code data in db
+                upd_code.forgot_password_code = new_code
+                upd_code.forgot_password_code_creation = new_code_time
+
+                db.session.commit()
+
+                # send email with code
+                email_text = f"""
+                Hi {email_form.username.data.split("@")[0]},
+
+                Please ignore this email if you did not request for a password change.
+
+                Verification code: {new_code}
+
+                Best regards,
+                Thambolo
+                """
+                recipients = [email_form.username.data]
+                msg = MIMEText(email_text)
+                msg["Subject"] = "Password Change Verification Code for Telegram-code-forwarder"
+                msg["To"] = ", ".join(recipients)
+                msg["From"] = GMAIL_USERNAME
+
+                smtp_server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+                smtp_server.login(GMAIL_USERNAME, GMAIL_APP_PASSWORD)
+                try:
+                    smtp_server.sendmail(
+                        msg["From"], recipients, msg.as_string())
+                finally:
+                    smtp_server.quit()
+
+                # log/flash successful
+                app.logger.info(
+                    "Successfully created code and sent email")
+                    
+                return render_template('app-forgot-password.html', email_form=email_form, update_form=update_form, email_sent=True)
+
+            # log/flash failure
+            flash(
+                message="User not found", category="Info")
+            app.logger.info(
+                "User '%s' not found", email_form.username.data)
+            
+            return redirect(url_for("forgot_password"))
+
+    return render_template('app-forgot-password.html', email_form=email_form, update_form=update_form, email_sent=False)
+
+
+@app.route('/forgot-password-update/<email>', methods=['POST'])
+async def forgot_password_update(email):
+    """
+    Forgot Password Page and Email form
+    """
+    email_form = ForgotPasswordEmailForm()
+    update_form = ForgotPasswordUpdateForm()
+
+    if request.method == "POST":
+
+        if update_form.validate_on_submit():
+
+            # Update password in database
+            upd_pw = db.session.execute(db.select(User).filter_by(
+                username=email)).scalar_one_or_none()
+            
+            redirect_string = "login"
+
+            if upd_pw:
+
+                if upd_pw.forgot_password_code == update_form.code.data:
+
+                    hashed_password = bcrypt.generate_password_hash(
+                        update_form.password.data)
+                    upd_pw.password = hashed_password
+
+                    # log
+                    flash(
+                        message="Password updated", category="Info")
+                    app.logger.info(
+                        "User successfully updated their password")
+                    redirect_string = "login"
+                else:
+                    # log
+                    flash(
+                        message=f"Code Invalid '{update_form.code.data}'", category="Error")
+                    app.logger.info(
+                        "Incorrect code '%s'", update_form.code.data)
+                    redirect_string = "forgot_password"
+            else:
+                # log
+                flash(
+                    message="Invalid user", category="Error")
+                app.logger.info(
+                    "Account %s not found", update_form.username.data)
+                redirect_string = "forgot_password"
+
+            # Nullify forgot_password_code and forgot_password_code_creation
+            upd_pw.forgot_password_code = None
+            upd_pw.forgot_password_code_creation = None
+
+            db.session.commit()
+
+            return redirect(url_for(redirect_string))
+
+    return render_template('app-forgot-password.html', email_form=email_form, update_form=update_form)
+
+
 @app.route('/login', methods=['GET', 'POST'])
 async def login():
     form = LoginForm()
+
     if request.method == "POST":
 
         if form.validate_on_submit():
@@ -197,8 +557,13 @@ async def login():
             if user:
                 if bcrypt.check_password_hash(user.password, form.password.data):
                     login_user(user)
-
                     app.logger.info("User '%s' logged in", form.username.data)
+
+                    if not user.email_verified:
+                        app.logger.info(
+                            "User '%s' email not verified", form.username.data)
+                        return redirect(url_for("email_verification"))
+
                     return redirect(url_for('tele_login'))
 
     return render_template('app-login.html', form=form)
@@ -217,7 +582,7 @@ async def logout():
 
     # telethon disconnect from telegram (prevent sqlite3.OperationalError:database is locked)
     client = TelegramClient(
-        f'{THIS_FOLDER}/tele_sessions/{current_user.id}_{current_user.username}', API_ID, API_HASH)
+        f'{THIS_FOLDER}/tele_sessions/{current_user.id}', API_ID, API_HASH)
 
     if not client.is_connected():
         await client.connect()
@@ -232,6 +597,7 @@ async def logout():
 
 @app.route("/", methods=["GET", "POST"])
 @login_required
+@require_account_verified
 async def tele_login():
     """ 
     Essential for telethon's Asyncio to work with flask's threads. 
@@ -243,7 +609,7 @@ async def tele_login():
     form = TelePhoneForm()
 
     client = TelegramClient(
-        f'{THIS_FOLDER}/tele_sessions/{current_user.id}_{current_user.username}', API_ID, API_HASH)
+        f'{THIS_FOLDER}/tele_sessions/{current_user.id}', API_ID, API_HASH)
 
     # Connect to Telegram
     try:
@@ -317,6 +683,7 @@ async def tele_login():
 
 @app.route("/code", methods=["GET", "POST"])
 @login_required
+@require_account_verified
 async def code():
 
     # redirect to phone form if no tele_phone session key
@@ -333,7 +700,7 @@ async def code():
 
             # Set the Client session to be used based on current user logged in
             client = TelegramClient(
-                f'{THIS_FOLDER}/tele_sessions/{current_user.id}_{current_user.username}', API_ID, API_HASH)
+                f'{THIS_FOLDER}/tele_sessions/{current_user.id}', API_ID, API_HASH)
 
             # Connect to Telegram if not connected
             if not client.is_connected():
@@ -403,11 +770,13 @@ async def code():
             else:
                 me = await client.get_me()
                 session["tele_user"] = me.username
+
+                app.logger.info(
+                    "User '%s' successfully logged into Telegram account '%s'", current_user.username, me.username)
+
                 await client.disconnect()
                 await clear_tele_sessionkeys()
 
-                app.logger.info(
-                    "User '%s' successfully logged into Telegram account '%s'", current_user.username, session["tele_user"])
                 return redirect(url_for("retrieve_code"))
 
     return render_template("tele-login-code.html", form=form, phone=session["tele_phone"])
@@ -418,6 +787,7 @@ async def code():
 
 @app.route("/2fa", methods=["GET", "POST"])
 @login_required
+@require_account_verified
 async def get2FA():
 
     if "tele_2FA" not in session:
@@ -444,7 +814,7 @@ async def get2FA():
             password = form.password.data
 
             client = TelegramClient(
-                f'{THIS_FOLDER}/tele_sessions/{current_user.id}_{current_user.username}', API_ID, API_HASH)
+                f'{THIS_FOLDER}/tele_sessions/{current_user.id}', API_ID, API_HASH)
 
             # Connect to Telegram
             if not client.is_connected():
@@ -491,12 +861,13 @@ async def get2FA():
             if "tele_user" not in session:
                 session["tele_user"] = me.username
 
-            await clear_tele_sessionkeys()
-
             await client.disconnect()
 
             app.logger.info(
-                "User '%s' successfully logged into Telegram account '%s'", current_user.username, session["tele_user"])
+                "User '%s' successfully logged into Telegram account '%s'", current_user.username, me.username)
+
+            await clear_tele_sessionkeys()
+
             return redirect(url_for("retrieve_code"))
 
     return render_template("tele-login-2fa.html", form=form)
@@ -504,10 +875,11 @@ async def get2FA():
 
 @app.route("/retrieve-code", methods=["GET"])
 @login_required
+@require_account_verified
 async def retrieve_code():
 
     client = TelegramClient(
-        f'{THIS_FOLDER}/tele_sessions/{current_user.id}_{current_user.username}', API_ID, API_HASH)
+        f'{THIS_FOLDER}/tele_sessions/{current_user.id}', API_ID, API_HASH)
 
     # Connect to Telegram
     if not client.is_connected():
@@ -526,6 +898,7 @@ async def retrieve_code():
 
 @app.route("/retrieve-code-btn", methods=["GET"])
 @login_required
+@require_account_verified
 async def retrieve_code_btn():
     # gets the last < 3 login codes
     # track how many times user is activating this route using session dict. maximum should be 6 invocations every 30sec.
@@ -543,7 +916,7 @@ async def retrieve_code_btn():
     #################################################################################
     # TELETHON get login codes
     client = TelegramClient(
-        f'{THIS_FOLDER}/tele_sessions/{current_user.id}_{current_user.username}', API_ID, API_HASH)
+        f'{THIS_FOLDER}/tele_sessions/{current_user.id}', API_ID, API_HASH)
 
     # Connect to Telegram
     if not client.is_connected():
@@ -593,13 +966,14 @@ async def retrieve_code_btn():
 
 @app.route("/tele-logout", methods=["GET"])
 @login_required
+@require_account_verified
 async def tele_logout():
 
     await clear_tele_sessionkeys()
 
     # Connect to Telegram
     client = TelegramClient(
-        f'{THIS_FOLDER}/tele_sessions/{current_user.id}_{current_user.username}', API_ID, API_HASH)
+        f'{THIS_FOLDER}/tele_sessions/{current_user.id}', API_ID, API_HASH)
 
     if not client.is_connected():
         await client.connect()
@@ -627,7 +1001,7 @@ def not_found_error(e):
 async def telethon_database_locked(e):
 
     client = TelegramClient(
-        f'{THIS_FOLDER}/tele_sessions/{current_user.id}_{current_user.username}', API_ID, API_HASH)
+        f'{THIS_FOLDER}/tele_sessions/{current_user.id}', API_ID, API_HASH)
 
     if client.is_connected():
         await client.disconnect()

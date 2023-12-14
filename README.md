@@ -1,5 +1,6 @@
-# telegram-code-forwarder
- Forwards telegram's login code to the browser instead of your mobile
+# TeleCF
+#### Video Demo: https://youtu.be/ccgPJAqvvzU
+#### Description: Forwards telegram's login code to the browser instead of your mobile
  
 ## Built on
 - Flask

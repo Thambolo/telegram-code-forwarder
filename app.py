@@ -209,6 +209,8 @@ class ForgotPasswordUpdateForm(FlaskForm):
     code = StringField(validators=[InputRequired(message="Empty field"), Length(
         min=8, max=8), Regexp("[a-zA-Z0-9]+", message="One or more characters are invalid")], render_kw={})
 
+    recaptcha = RecaptchaField()
+
     submit = SubmitField("Submit")
 
 
@@ -474,7 +476,7 @@ async def forgot_password():
                 # log/flash successful
                 app.logger.info(
                     "Successfully created code and sent email")
-                    
+
                 return render_template('app-forgot-password.html', email_form=email_form, update_form=update_form, email_sent=True)
 
             # log/flash failure
@@ -482,7 +484,7 @@ async def forgot_password():
                 message="User not found", category="Info")
             app.logger.info(
                 "User '%s' not found", email_form.username.data)
-            
+
             return redirect(url_for("forgot_password"))
 
     return render_template('app-forgot-password.html', email_form=email_form, update_form=update_form, email_sent=False)
@@ -503,7 +505,7 @@ async def forgot_password_update(email):
             # Update password in database
             upd_pw = db.session.execute(db.select(User).filter_by(
                 username=email)).scalar_one_or_none()
-            
+
             redirect_string = "login"
 
             if upd_pw:

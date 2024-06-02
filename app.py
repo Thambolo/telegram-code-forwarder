@@ -325,7 +325,7 @@ async def email_verification():
         new_code_time = datetime.now(timezone.utc)
 
         upd_code = User.query.get_or_404(current_user.id)
-        upd_code.email_code = new_code
+        upd_code.email_code = bcrypt.generate_password_hash(new_code)
         upd_code.email_code_creation = new_code_time
 
         db.session.commit()
@@ -371,7 +371,7 @@ async def email_verification():
                     return redirect(url_for("email_verification"))
 
                 # match: update database email_verified to True, nullify email_code and email_code_creation
-                if current_user.email_code == form.code.data:
+                if bcrypt.check_password_hash(current_user.email_code, form.code.data):
 
                     upd_user = User.query.get_or_404(current_user.id)
                     upd_user.email_code = None
@@ -443,7 +443,8 @@ async def forgot_password():
                 new_code_time = datetime.now(timezone.utc)
 
                 # store code data in db
-                upd_code.forgot_password_code = new_code
+                upd_code.forgot_password_code = bcrypt.generate_password_hash(
+                    new_code)
                 upd_code.forgot_password_code_creation = new_code_time
 
                 db.session.commit()
@@ -510,7 +511,7 @@ async def forgot_password_update(email):
 
             if upd_pw:
 
-                if upd_pw.forgot_password_code == update_form.code.data:
+                if bcrypt.check_password_hash(upd_pw.forgot_password_code, update_form.code.data):
 
                     hashed_password = bcrypt.generate_password_hash(
                         update_form.password.data)

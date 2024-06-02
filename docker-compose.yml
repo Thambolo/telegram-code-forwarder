@@ -1,0 +1,19 @@
+# Use this command to rebuild image and run it in background(docker app)
+# docker compose up -d --no-deps --build <service_name>
+version: '3'
+services:
+  webapp:
+    # will build ./docker/webapp/Dockerfile
+    build: 
+      context: .
+      dockerfile: ./docker/webapp/Dockerfile
+    ports:
+     - "5000:5000"
+    volumes:
+     - instance-db:/telegram-code-forwarder/instance
+     - tele-sessions:/telegram-code-forwarder/tele_sessions
+    env_file:
+     - .env
+volumes:
+  instance-db:
+  tele-sessions:

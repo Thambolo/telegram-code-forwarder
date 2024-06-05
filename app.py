@@ -147,6 +147,23 @@ class User(db.Model, UserMixin):
                          unique=False, default=False)
 
 
+class Secret(db.Model):
+    """
+    Secret model for database initialisation.
+
+    Schema update steps:
+    0. Delete current instance/database.db
+    1. Open python shell in terminal `py`
+    2. run `from app import app, db`
+    3. run ```with app.app_context():
+    db.create_all()```
+    """
+    id = db.Column(db.Integer,
+                   primary_key=True)
+    name = db.Column(db.String(20), nullable=False, unique=False)
+    value = db.Column(db.String(80), nullable=False, unique=False)
+
+
 class RegisterForm(FlaskForm):
     """
     App Registration Form
@@ -159,6 +176,9 @@ class RegisterForm(FlaskForm):
 
     password2 = PasswordField(validators=[InputRequired()], render_kw={
                               "placeholder": "Confirm Password"})
+
+    access_code = PasswordField(validators=[InputRequired(), Length(
+        max=80)], render_kw={"placeholder": "Access Code"})
 
     recaptcha = RecaptchaField()
 
@@ -173,6 +193,20 @@ class RegisterForm(FlaskForm):
         if existing_username:
             self.username.errors += (ValidationError(
                 "That email has already been registered"),)
+
+    def validate_access_code(self, access_code):
+        """
+        Ensures access code matches
+        """
+        db_access_code = Secret.query.filter_by(
+            name="registration_access_code").first()
+
+        if db_access_code is None:
+            self.access_code.errors += (ValidationError(
+                "No access code found, request assistance from site administrator"),)
+        elif db_access_code.value != access_code.data:
+            self.access_code.errors += (ValidationError(
+                "Invalid access code"),)
 
 
 class EmailVerificationForm(FlaskForm):

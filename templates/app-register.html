@@ -62,6 +62,21 @@
               </div>
             </div>
 
+            <div>
+              <div class="flex items-center justify-between">
+                <label for="access_code" class="block text-sm font-medium leading-6 text-white">Access Code</label>
+              </div>
+              <div class="mt-2">
+                {{ form.access_code(class_="block w-full rounded-md border-0 bg-white/5 py-1.5 pr-10 text-white invalid:text-red-500 ring-1 ring-inset ring-white/10 invalid:ring-1 invalid:ring-inset invalid:ring-red-500 placeholder:invalid:text-red-300 focus:ring-2 focus:ring-inset focus:ring-indigo-500 focus:invalid:ring-2 focus:invalid:ring-inset focus:invalid:ring-red-500 sm:text-sm sm:leading-6") }}
+                {% if form.access_code.errors %}
+                  {% for error in form.access_code.errors %}
+                    <p class="mt-2 text-xs text-red-300">{{ error }}</p>
+                  {% endfor %}
+                {% endif %}
+              </div>
+            </div>
+            
+
             <div style="transform:scale(0.7);transform-origin:0 0;filter: invert(0.8) hue-rotate(180deg);">
               {{ form.recaptcha }}
             </div>
